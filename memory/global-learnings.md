@@ -25,3 +25,4 @@ Do you want me to be a smart assistant you talk to, or do you want me to become 
 If it's the latter, we need to make feeding me context as frictionless as possible. Otherwise this stays a nice folder structure.
 
 What's one thing you're working on RIGHT NOW that we could start tracking properly?
+- [2026-06-10 19:45] Owner is actively refining how context is structured and stored — treating system design as iterative, not set-and-forget.
