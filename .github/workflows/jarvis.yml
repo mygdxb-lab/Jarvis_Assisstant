@@ -30,7 +30,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python - <<'EOF'
-          import os, json, requests, anthropic
+          import os, json, requests, anthropic, base64
           from datetime import datetime
 
           TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
@@ -46,12 +46,10 @@ jobs:
               url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
               r = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
               if r.status_code == 200:
-                  import base64
                   return base64.b64decode(r.json()["content"]).decode("utf-8"), r.json()["sha"]
               return None, None
 
           def github_update(path, content, sha, message):
-              import base64
               url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
               requests.put(url, headers={"Authorization": f"token {GITHUB_TOKEN}"}, json={
                   "message": message,
@@ -77,14 +75,12 @@ jobs:
           {conversation}
 
           Return only the updated markdown profile, nothing else."""
-
               r = client.messages.create(
                   model="claude-sonnet-4-6",
                   max_tokens=2000,
                   messages=[{"role": "user", "content": prompt}]
               )
-              updated = r.content[0].text.strip()
-              github_update("memory/my-profile.md", updated, profile_sha, "memory: profile updated by Jarvis")
+              github_update("memory/my-profile.md", r.content[0].text.strip(), profile_sha, "memory: profile updated")
 
           def save_learning(insight, learnings, learnings_sha):
               timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
@@ -113,7 +109,14 @@ jobs:
                   "parse_mode": "Markdown"
               })
 
-          def ask_jarvis(text, profile, learnings):
+          def get_image_base64(file_id):
+              file_info = requests.get(f"{TELEGRAM_API}/getFile?file_id={file_id}").json()
+              file_path = file_info["result"]["file_path"]
+              file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
+              img_data = requests.get(file_url).content
+              return base64.standard_b64encode(img_data).decode("utf-8")
+
+          def ask_jarvis(text, profile, learnings, image_base64=None):
               system = f"""You are Jarvis, a personal AI assistant and second brain.
 
           Owner profile:
@@ -131,11 +134,29 @@ jobs:
 
           Current time: {datetime.utcnow().strftime("%Y-%m-%d %H:%M")} UTC"""
 
+              if image_base64:
+                  content = [
+                      {
+                          "type": "image",
+                          "source": {
+                              "type": "base64",
+                              "media_type": "image/jpeg",
+                              "data": image_base64
+                          }
+                      },
+                      {
+                          "type": "text",
+                          "text": text if text else "What do you see in this image? Give me your analysis."
+                      }
+                  ]
+              else:
+                  content = text
+
               r = client.messages.create(
                   model="claude-sonnet-4-6",
                   max_tokens=1000,
                   system=system,
-                  messages=[{"role": "user", "content": text}]
+                  messages=[{"role": "user", "content": content}]
               )
               return r.content[0].text
 
@@ -152,27 +173,39 @@ jobs:
               offset = update["update_id"] + 1
               msg = update.get("message", {})
               chat_id = msg.get("chat", {}).get("id")
-              text = msg.get("text", "")
-              if not text or not chat_id:
+              if not chat_id:
                   continue
 
-              print(f"Message: {text}")
-              reply = ask_jarvis(text, profile, learnings)
+              text = msg.get("text", "")
+              caption = msg.get("caption", "")
+              photo = msg.get("photo")
+              image_base64 = None
+
+              # Handle image messages
+              if photo:
+                  print("Image received")
+                  largest = photo[-1]
+                  image_base64 = get_image_base64(largest["file_id"])
+                  text = caption or ""
+
+              if not text and not image_base64:
+                  continue
+
+              print(f"Message: {text or '[image]'}")
+              reply = ask_jarvis(text, profile, learnings, image_base64)
 
               if "LEARNING:" in reply:
                   parts = reply.split("LEARNING:")
                   clean_reply = parts[0].strip()
-                  insight = parts[1].strip()
-                  save_learning(insight, learnings, learnings_sha)
+                  save_learning(parts[1].strip(), learnings, learnings_sha)
               else:
                   clean_reply = reply
 
               send_message(chat_id, clean_reply)
 
-              # Update profile silently after every message
-              conversation = f"User: {text}\nJarvis: {clean_reply}"
+              conversation = f"User: {text or '[sent an image]'}\nJarvis: {clean_reply}"
               update_profile(profile, profile_sha, conversation)
-              print("Profile updated.")
+              print("Done.")
 
           if offset:
               save_offset(offset)
