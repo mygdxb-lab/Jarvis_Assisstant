@@ -1,0 +1,11 @@
+name: Jarvis
+
+on:
+  workflow_dispatch:
+
+jobs:
+  jarvis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: echo 'Jarvis placeholder'
