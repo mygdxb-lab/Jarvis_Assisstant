@@ -34,4 +34,147 @@ jobs:
           from datetime import datetime
 
           TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-          ANTHROPIC_API
+          ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
+          GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+          GITHUB_REPO = "mygdxb-lab/Jarvis_Assisstant"
+          OFFSET_FILE = "memory/telegram-offset.json"
+          TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+
+          client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+          def github_get(path):
+              url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+              r = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
+              if r.status_code == 200:
+                  import base64
+                  return base64.b64decode(r.json()["content"]).decode("utf-8"), r.json()["sha"]
+              return None, None
+
+          def github_update(path, content, sha, message):
+              import base64
+              url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+              requests.put(url, headers={"Authorization": f"token {GITHUB_TOKEN}"}, json={
+                  "message": message,
+                  "content": base64.b64encode(content.encode()).decode(),
+                  "sha": sha
+              })
+
+          def load_memory():
+              profile, profile_sha = github_get("memory/my-profile.md")
+              learnings, learnings_sha = github_get("memory/global-learnings.md")
+              return profile or "", profile_sha, learnings or "", learnings_sha
+
+          def update_profile(profile, profile_sha, conversation):
+              prompt = f"""Based on this conversation, update the user profile below.
+          Extract personality traits, working style, projects, preferences, goals.
+          Return the COMPLETE updated profile in markdown. Do not shrink existing content.
+          Only add or refine. Keep it clean and structured.
+
+          Current profile:
+          {profile}
+
+          New conversation:
+          {conversation}
+
+          Return only the updated markdown profile, nothing else."""
+
+              r = client.messages.create(
+                  model="claude-sonnet-4-6",
+                  max_tokens=2000,
+                  messages=[{"role": "user", "content": prompt}]
+              )
+              updated = r.content[0].text.strip()
+              github_update("memory/my-profile.md", updated, profile_sha, "memory: profile updated by Jarvis")
+
+          def save_learning(insight, learnings, learnings_sha):
+              timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+              updated = learnings + f"\n- [{timestamp}] {insight}"
+              github_update("memory/global-learnings.md", updated, learnings_sha, "memory: new learning")
+
+          def get_offset():
+              content, _ = github_get(OFFSET_FILE)
+              if content:
+                  try:
+                      return json.loads(content).get("offset", None)
+                  except:
+                      return None
+              return None
+
+          def save_offset(offset):
+              content, sha = github_get(OFFSET_FILE)
+              new_content = json.dumps({"offset": offset})
+              if sha:
+                  github_update(OFFSET_FILE, new_content, sha, "chore: update telegram offset")
+
+          def send_message(chat_id, text):
+              requests.post(f"{TELEGRAM_API}/sendMessage", json={
+                  "chat_id": chat_id,
+                  "text": text,
+                  "parse_mode": "Markdown"
+              })
+
+          def ask_jarvis(text, profile, learnings):
+              system = f"""You are Jarvis, a personal AI assistant and second brain.
+
+          Owner profile:
+          {profile}
+
+          Accumulated learnings:
+          {learnings}
+
+          Rules:
+          - Be direct and concise
+          - Reference past context naturally
+          - Be proactive — flag issues, connect dots, suggest ideas
+          - Push back when needed
+          - If you learn something new about your owner end with: LEARNING: <one line insight>
+
+          Current time: {datetime.utcnow().strftime("%Y-%m-%d %H:%M")} UTC"""
+
+              r = client.messages.create(
+                  model="claude-sonnet-4-6",
+                  max_tokens=1000,
+                  system=system,
+                  messages=[{"role": "user", "content": text}]
+              )
+              return r.content[0].text
+
+          print("Jarvis checking messages...")
+          profile, profile_sha, learnings, learnings_sha = load_memory()
+          offset = get_offset()
+
+          params = {"timeout": 10}
+          if offset:
+              params["offset"] = offset
+          updates = requests.get(f"{TELEGRAM_API}/getUpdates", params=params).json().get("result", [])
+
+          for update in updates:
+              offset = update["update_id"] + 1
+              msg = update.get("message", {})
+              chat_id = msg.get("chat", {}).get("id")
+              text = msg.get("text", "")
+              if not text or not chat_id:
+                  continue
+
+              print(f"Message: {text}")
+              reply = ask_jarvis(text, profile, learnings)
+
+              if "LEARNING:" in reply:
+                  parts = reply.split("LEARNING:")
+                  clean_reply = parts[0].strip()
+                  insight = parts[1].strip()
+                  save_learning(insight, learnings, learnings_sha)
+              else:
+                  clean_reply = reply
+
+              send_message(chat_id, clean_reply)
+
+              # Update profile silently after every message
+              conversation = f"User: {text}\nJarvis: {clean_reply}"
+              update_profile(profile, profile_sha, conversation)
+              print("Profile updated.")
+
+          if offset:
+              save_offset(offset)
+          print("Jarvis done.")
+          EOF
