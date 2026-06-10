@@ -60,35 +60,13 @@ jobs:
               })
 
           def load_memory():
-              profile, profile_sha = github_get("memory/my-profile.md")
-              learnings, learnings_sha = github_get("memory/global-learnings.md")
-              return profile or "", profile_sha, learnings or "", learnings_sha
+              profile, _ = github_get("memory/my-profile.md")
+              learnings, _ = github_get("memory/global-learnings.md")
+              return profile or "", learnings or ""
 
-          def update_profile(profile, profile_sha, conversation):
-              prompt = f"""Based on this conversation, update the user profile below.
-          Extract personality traits, working style, projects, preferences, goals.
-          Return the COMPLETE updated profile in markdown. Do not shrink existing content.
-          Only add or refine. Keep it clean and structured.
-
-          Current profile:
-          {profile}
-
-          New conversation:
-          {conversation}
-
-          Return only the updated markdown profile, nothing else."""
-
-              r = client.messages.create(
-                  model="claude-sonnet-4-6",
-                  max_tokens=2000,
-                  messages=[{"role": "user", "content": prompt}]
-              )
-              updated = r.content[0].text.strip()
-              github_update("memory/my-profile.md", updated, profile_sha, "memory: profile updated by Jarvis")
-
-          def save_learning(insight, learnings, learnings_sha):
+          def save_learning(insight, learnings_content, learnings_sha):
               timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-              updated = learnings + f"\n- [{timestamp}] {insight}"
+              updated = learnings_content + f"\n- [{timestamp}] {insight}"
               github_update("memory/global-learnings.md", updated, learnings_sha, "memory: new learning")
 
           def get_offset():
@@ -140,7 +118,9 @@ jobs:
               return r.content[0].text
 
           print("Jarvis checking messages...")
-          profile, profile_sha, learnings, learnings_sha = load_memory()
+          profile, _ = load_memory()
+          _, learnings_sha = github_get("memory/global-learnings.md")
+          learnings_content, _ = github_get("memory/global-learnings.md")
           offset = get_offset()
 
           params = {"timeout": 10}
@@ -155,24 +135,16 @@ jobs:
               text = msg.get("text", "")
               if not text or not chat_id:
                   continue
-
               print(f"Message: {text}")
-              reply = ask_jarvis(text, profile, learnings)
-
+              reply = ask_jarvis(text, profile, learnings_content or "")
               if "LEARNING:" in reply:
                   parts = reply.split("LEARNING:")
                   clean_reply = parts[0].strip()
-                  insight = parts[1].strip()
-                  save_learning(insight, learnings, learnings_sha)
+                  if learnings_sha:
+                      save_learning(parts[1].strip(), learnings_content or "", learnings_sha)
               else:
                   clean_reply = reply
-
               send_message(chat_id, clean_reply)
-
-              # Update profile silently after every message
-              conversation = f"User: {text}\nJarvis: {clean_reply}"
-              update_profile(profile, profile_sha, conversation)
-              print("Profile updated.")
 
           if offset:
               save_offset(offset)
