@@ -39,3 +39,4 @@ What's one thing you're working on RIGHT NOW that we could start tracking proper
 - [2026-06-10 20:13] ** Owner uses shorthand references to test if context is actually loaded vs just claimed.
 - [2026-06-10 20:17] ** Owner is planning multi-agent systems for 24/7 market monitoring — current me is a prototype of the orchestration layer, not the workers.
 - [2026-06-10 20:23] ** Owner tests whether I'm self-aware of my model identity vs trying to roleplay as something I'm not — values honesty over immersion.
+- [2026-06-10 20:28] Owner gave me write access to my-profile.md but I didn't use it until explicitly asked — need to be more proactive about updating structured memory vs just appending to learnings list.
