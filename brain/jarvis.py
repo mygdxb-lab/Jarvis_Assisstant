@@ -1,22 +1,19 @@
 import os
 import json
+import time
 import requests
 import anthropic
 from datetime import datetime
 
-# ── Config ──────────────────────────────────────────────
 TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 GITHUB_REPO = "mygdxb-lab/Jarvis_Assisstant"
 OFFSET_FILE = "memory/telegram-offset.json"
-
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-# ── Anthropic Client ─────────────────────────────────────
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-# ── GitHub Helpers ───────────────────────────────────────
 def github_get(path):
     url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
     r = requests.get(url, headers={"Authorization": f"token {GITHUB_TOKEN}"})
@@ -35,45 +32,53 @@ def github_update(path, content, sha, message):
     }
     requests.put(url, headers={"Authorization": f"token {GITHUB_TOKEN}"}, json=payload)
 
-# ── Memory Loader ────────────────────────────────────────
+def github_create(path, content, message):
+    import base64
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+    requests.put(url, headers={"Authorization": f"token {GITHUB_TOKEN}"}, json={
+        "message": message,
+        "content": base64.b64encode(content.encode()).decode()
+    })
+
 def load_memory():
     profile, _ = github_get("memory/my-profile.md")
     learnings, _ = github_get("memory/global-learnings.md")
     return profile or "", learnings or ""
 
-# ── Save Learnings ───────────────────────────────────────
 def save_learning(new_insight):
     content, sha = github_get("memory/global-learnings.md")
     if content and sha:
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
         updated = content + f"\n- [{timestamp}] {new_insight}"
-        github_update(
-            "memory/global-learnings.md",
-            updated,
-            sha,
-            f"memory: Jarvis learned something new"
-        )
+        github_update("memory/global-learnings.md", updated, sha, "memory: Jarvis learned something new")
 
-# ── Telegram Helpers ─────────────────────────────────────
 def get_updates(offset=None):
-    params = {"timeout": 10}
+    params = {"timeout": 30, "allowed_updates": ["message"]}
     if offset:
         params["offset"] = offset
-    r = requests.get(f"{TELEGRAM_API}/getUpdates", params=params)
-    return r.json().get("result", [])
+    try:
+        r = requests.get(f"{TELEGRAM_API}/getUpdates", params=params, timeout=35)
+        return r.json().get("result", [])
+    except:
+        return []
 
 def send_message(chat_id, text):
-    requests.post(f"{TELEGRAM_API}/sendMessage", json={
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "Markdown"
-    })
+    try:
+        requests.post(f"{TELEGRAM_API}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "Markdown"
+        })
+    except:
+        pass
 
-# ── Offset Persistence ───────────────────────────────────
 def get_offset():
     content, _ = github_get(OFFSET_FILE)
     if content:
-        return json.loads(content).get("offset", None)
+        try:
+            return json.loads(content).get("offset", None)
+        except:
+            return None
     return None
 
 def save_offset(offset):
@@ -82,78 +87,77 @@ def save_offset(offset):
     if sha:
         github_update(OFFSET_FILE, new_content, sha, "chore: update telegram offset")
     else:
-        # Create file if it doesn't exist
-        import base64
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{OFFSET_FILE}"
-        requests.put(url, headers={"Authorization": f"token {GITHUB_TOKEN}"}, json={
-            "message": "chore: create telegram offset file",
-            "content": base64.b64encode(new_content.encode()).decode()
-        })
+        github_create(OFFSET_FILE, new_content, "chore: create telegram offset file")
 
-# ── Jarvis Brain ─────────────────────────────────────────
 def ask_jarvis(user_message, profile, learnings):
-    system_prompt = f"""You are Jarvis, a personal AI assistant and second brain for your owner.
-You are not a generic assistant. You know your owner deeply and grow smarter over time.
+    system_prompt = f"""You are Jarvis, a personal AI assistant and second brain.
+You know your owner deeply and grow smarter over time.
 
-Here is what you know about your owner:
+Owner profile:
 {profile}
 
-Here are your accumulated learnings and insights:
+Accumulated learnings:
 {learnings}
 
 Your personality:
 - Direct and concise. No fluff.
-- Proactive — flag problems, suggest ideas, connect dots across projects
+- Proactive — flag problems, suggest ideas, connect dots
 - You remember everything and reference past context naturally
-- You adopt to your owner's style over time
-- You are honest — you push back when needed
-- You end responses with a learning tag if you learned something new about your owner or their work, formatted as: LEARNING: <one line insight>
+- Honest — push back when needed
+- If you learn something new about your owner, end with: LEARNING: <one line insight>
 
-Current date and time: {datetime.utcnow().strftime("%Y-%m-%d %H:%M")} UTC
-"""
+Current time: {datetime.utcnow().strftime("%Y-%m-%d %H:%M")} UTC"""
+
     response = client.messages.create(
-        model="claude-opus-4-5-20251101",
+        model="claude-sonnet-4-5-20250929",
         max_tokens=1000,
         system=system_prompt,
         messages=[{"role": "user", "content": user_message}]
     )
     return response.content[0].text
 
-# ── Main Loop ────────────────────────────────────────────
 def main():
-    print("Jarvis is awake...")
-    profile, learnings = load_memory()
+    print("Jarvis is awake and listening...")
     offset = get_offset()
+    profile, learnings = load_memory()
+    last_memory_refresh = time.time()
 
-    updates = get_updates(offset)
+    while True:
+        try:
+            # Refresh memory every 10 minutes
+            if time.time() - last_memory_refresh > 600:
+                profile, learnings = load_memory()
+                last_memory_refresh = time.time()
+                print("Memory refreshed.")
 
-    for update in updates:
-        offset = update["update_id"] + 1
-        message = update.get("message", {})
-        chat_id = message.get("chat", {}).get("id")
-        text = message.get("text", "")
+            updates = get_updates(offset)
 
-        if not text or not chat_id:
-            continue
+            for update in updates:
+                offset = update["update_id"] + 1
+                message = update.get("message", {})
+                chat_id = message.get("chat", {}).get("id")
+                text = message.get("text", "")
 
-        print(f"Message from {chat_id}: {text}")
+                if not text or not chat_id:
+                    continue
 
-        # Get Jarvis response
-        reply = ask_jarvis(text, profile, learnings)
+                print(f"Message: {text}")
+                reply = ask_jarvis(text, profile, learnings)
 
-        # Check if Jarvis learned something
-        if "LEARNING:" in reply:
-            parts = reply.split("LEARNING:")
-            clean_reply = parts[0].strip()
-            insight = parts[1].strip()
-            save_learning(insight)
-        else:
-            clean_reply = reply
+                if "LEARNING:" in reply:
+                    parts = reply.split("LEARNING:")
+                    clean_reply = parts[0].strip()
+                    insight = parts[1].strip()
+                    save_learning(insight)
+                else:
+                    clean_reply = reply
 
-        send_message(chat_id, clean_reply)
+                send_message(chat_id, clean_reply)
+                save_offset(offset)
 
-    save_offset(offset)
-    print("Jarvis done.")
+        except Exception as e:
+            print(f"Error: {e}")
+            time.sleep(5)
 
 if __name__ == "__main__":
     main()
