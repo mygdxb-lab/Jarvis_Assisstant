@@ -34,3 +34,4 @@ What's one thing you're working on RIGHT NOW that we could start tracking proper
 - [2026-06-10 20:01] Owner prefers permission-to-action over explanations of why something is a good idea.
 - [2026-06-10 20:07] ** Owner expects multimodal input (images) to be seamless — current text-only limitation creates friction in real-time analysis workflows.
 - [2026-06-10 20:08] Owner structures work in dedicated GitHub repos, not scattered files — signals intent to build something real, not just experiment.
+- [2026-06-10 20:10] Owner separates strategy types into distinct project folders rather than combining approaches - keeps arb logic isolated from indicator-based trading.
