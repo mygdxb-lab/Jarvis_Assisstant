@@ -30,3 +30,4 @@ What's one thing you're working on RIGHT NOW that we could start tracking proper
 - [2026-06-10 19:56] ** Owner tests system capabilities directly rather than assuming documentation is correct.
 - [2026-06-10 19:57] ** Owner is exploring trading strategies across multiple dimensions (arb systems + indicator-based strategies) — likely testing what actually works vs theory.
 - [2026-06-10 19:59] ** Owner evaluates system quality by visual signal clarity on charts, not just raw metrics.
+- [2026-06-10 19:59] ** Owner expects instant data access for real-time trading decisions — current limitations create friction in the workflow.
