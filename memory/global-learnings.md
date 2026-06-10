@@ -33,3 +33,4 @@ What's one thing you're working on RIGHT NOW that we could start tracking proper
 - [2026-06-10 19:59] ** Owner expects instant data access for real-time trading decisions — current limitations create friction in the workflow.
 - [2026-06-10 20:01] Owner prefers permission-to-action over explanations of why something is a good idea.
 - [2026-06-10 20:07] ** Owner expects multimodal input (images) to be seamless — current text-only limitation creates friction in real-time analysis workflows.
+- [2026-06-10 20:08] Owner structures work in dedicated GitHub repos, not scattered files — signals intent to build something real, not just experiment.
