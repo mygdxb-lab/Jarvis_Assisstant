@@ -37,3 +37,4 @@ What's one thing you're working on RIGHT NOW that we could start tracking proper
 - [2026-06-10 20:10] Owner separates strategy types into distinct project folders rather than combining approaches - keeps arb logic isolated from indicator-based trading.
 - [2026-06-10 20:12] Owner expects me to have broader access than I actually do — need to be clear about current capabilities vs. aspirational ones.
 - [2026-06-10 20:13] ** Owner uses shorthand references to test if context is actually loaded vs just claimed.
+- [2026-06-10 20:17] ** Owner is planning multi-agent systems for 24/7 market monitoring — current me is a prototype of the orchestration layer, not the workers.
