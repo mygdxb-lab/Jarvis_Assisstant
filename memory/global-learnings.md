@@ -28,3 +28,4 @@ What's one thing you're working on RIGHT NOW that we could start tracking proper
 - [2026-06-10 19:45] Owner is actively refining how context is structured and stored — treating system design as iterative, not set-and-forget.
 - [2026-06-10 19:46] Owner needs concrete examples of what "second brain" means in practice, not abstract explanations.
 - [2026-06-10 19:56] ** Owner tests system capabilities directly rather than assuming documentation is correct.
+- [2026-06-10 19:57] ** Owner is exploring trading strategies across multiple dimensions (arb systems + indicator-based strategies) — likely testing what actually works vs theory.
