@@ -27,3 +27,4 @@ If it's the latter, we need to make feeding me context as frictionless as possib
 What's one thing you're working on RIGHT NOW that we could start tracking properly?
 - [2026-06-10 19:45] Owner is actively refining how context is structured and stored — treating system design as iterative, not set-and-forget.
 - [2026-06-10 19:46] Owner needs concrete examples of what "second brain" means in practice, not abstract explanations.
+- [2026-06-10 19:56] ** Owner tests system capabilities directly rather than assuming documentation is correct.
