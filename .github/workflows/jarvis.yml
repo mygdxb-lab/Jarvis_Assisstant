@@ -64,10 +64,12 @@ jobs:
               learnings, _ = github_get("memory/global-learnings.md")
               return profile or "", learnings or ""
 
-          def save_learning(insight, learnings_content, learnings_sha):
-              timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-              updated = learnings_content + f"\n- [{timestamp}] {insight}"
-              github_update("memory/global-learnings.md", updated, learnings_sha, "memory: new learning")
+          def save_learning(insight):
+              content, sha = github_get("memory/global-learnings.md")
+              if content and sha:
+                  timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+                  updated = content + f"\n- [{timestamp}] {insight}"
+                  github_update("memory/global-learnings.md", updated, sha, "memory: new learning")
 
           def get_offset():
               content, _ = github_get(OFFSET_FILE)
@@ -93,20 +95,13 @@ jobs:
 
           def ask_jarvis(text, profile, learnings):
               system = f"""You are Jarvis, a personal AI assistant and second brain.
-
           Owner profile:
           {profile}
 
-          Accumulated learnings:
+          Learnings:
           {learnings}
 
-          Rules:
-          - Be direct and concise
-          - Reference past context naturally
-          - Be proactive — flag issues, connect dots, suggest ideas
-          - Push back when needed
-          - If you learn something new about your owner end with: LEARNING: <one line insight>
-
+          Be direct, concise, proactive. If you learn something new end with LEARNING: <insight>
           Current time: {datetime.utcnow().strftime("%Y-%m-%d %H:%M")} UTC"""
 
               r = client.messages.create(
@@ -118,9 +113,7 @@ jobs:
               return r.content[0].text
 
           print("Jarvis checking messages...")
-          profile, _ = load_memory()
-          _, learnings_sha = github_get("memory/global-learnings.md")
-          learnings_content, _ = github_get("memory/global-learnings.md")
+          profile, learnings = load_memory()
           offset = get_offset()
 
           params = {"timeout": 10}
@@ -136,12 +129,11 @@ jobs:
               if not text or not chat_id:
                   continue
               print(f"Message: {text}")
-              reply = ask_jarvis(text, profile, learnings_content or "")
+              reply = ask_jarvis(text, profile, learnings)
               if "LEARNING:" in reply:
                   parts = reply.split("LEARNING:")
                   clean_reply = parts[0].strip()
-                  if learnings_sha:
-                      save_learning(parts[1].strip(), learnings_content or "", learnings_sha)
+                  save_learning(parts[1].strip())
               else:
                   clean_reply = reply
               send_message(chat_id, clean_reply)
@@ -150,3 +142,4 @@ jobs:
               save_offset(offset)
           print("Jarvis done.")
           EOF
+
